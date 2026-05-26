@@ -7,14 +7,20 @@ from pynput import keyboard
 from pynput.mouse import Button, Controller
 
 from 工具.图像识别 import 屏幕截图, 查找单个匹配, 查找所有匹配_多模板
+from 工具.读取配置 import 计算偏移位置, 读取配置
 
 mouse = Controller()
 
-模板_花朵目录 = os.path.join(os.path.dirname(__file__), "assets", "花朵模板")
-模板_收花按钮 = os.path.join(os.path.dirname(__file__), "assets", "收获按钮.png")
+模板_花朵目录 = os.path.join(os.path.dirname(__file__), "素材", "03-收获", "模板")
+模板_收花按钮 = os.path.join(
+    os.path.dirname(__file__), "素材", "03-收获", "按钮", "收获按钮.png"
+)
+
+cfg = 读取配置()
+拖动间隔 = cfg["拖动间隔"]
+最大上限 = cfg["最大上限"]
 
 
-# 后台 Esc 监听
 def _启动停止监听():
     def on_press(key):
         if key == keyboard.Key.esc:
@@ -28,16 +34,17 @@ def _启动停止监听():
 threading.Thread(target=_启动停止监听, daemon=True).start()
 
 
-def 收花():
-    print("=== 收花 ===")
+def 收获():
+    print("=== 收获 ===")
 
-    # ========== 第1次识别：找所有花 ==========
-    print("正在识别花朵位置...")
     花朵列表 = 查找所有匹配_多模板(屏幕截图(), 模板_花朵目录, 阈值=0.75)
 
     if not 花朵列表:
-        print("未在屏幕上找到花朵，请确认游戏画面可见")
+        print("未在屏幕上找到成熟的花朵")
         return
+
+    if 最大上限 > 0:
+        花朵列表 = 花朵列表[:最大上限]
 
     print(f"识别到 {len(花朵列表)} 朵花")
     for i, pos in enumerate(花朵列表):
@@ -47,44 +54,40 @@ def 收花():
     time.sleep(2)
 
     try:
-        # ========== 点击第一朵花，触发弹窗 ==========
         first = 花朵列表[0]
+        first = 计算偏移位置(*first)
         mouse.position = first
         mouse.click(Button.left, 1)
         print(f"已点击第一朵花 {first}，等待弹窗...")
         time.sleep(0.8)
 
-        # ========== 第2次识别：找收花按钮 ==========
-        print("正在查找收花按钮...")
+        print("正在查找收获按钮...")
         按钮位置 = 查找单个匹配(屏幕截图(), 模板_收花按钮, 阈值=0.7)
-
         if not 按钮位置:
-            print("未找到收花按钮")
+            print("未找到收获按钮")
             return
+        按钮位置 = 计算偏移位置(*按钮位置)
+        print(f"收获按钮位置: {按钮位置}")
 
-        print(f"收花按钮位置: {按钮位置}")
-
-        # ========== 移到按钮位置，按住 ==========
         bx, by = 按钮位置
         mouse.position = (bx, by)
         time.sleep(0.1)
         mouse.press(Button.left)
-        print(f"已按住收花按钮，开始拖动...")
+        print(f"已按住收获按钮，开始拖动...")
         time.sleep(0.1)
 
-        # ========== 拖动经过所有花（用第1次识别的列表） ==========
         for i, (tx, ty) in enumerate(花朵列表):
-            mouse.position = (tx, ty)
-            print(f"经过第 {i + 1} 朵花: ({tx}, {ty})")
-            time.sleep(0.2)
+            偏移位置 = 计算偏移位置(tx, ty)
+            mouse.position = 偏移位置
+            print(f"经过第 {i + 1} 朵花: {偏移位置}")
+            time.sleep(拖动间隔)
 
-        # ========== 松开 ==========
         mouse.release(Button.left)
-        print(f"=== 收花完成！共收 {len(花朵列表)} 朵花 ===")
+        print(f"=== 收获完成！共收获 {len(花朵列表)} 朵花 ===")
 
     except KeyboardInterrupt:
         print("\n已停止（Ctrl+C），鼠标已释放。")
 
 
 if __name__ == "__main__":
-    收花()
+    收获()

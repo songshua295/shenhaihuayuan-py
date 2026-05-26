@@ -6,8 +6,12 @@ import time
 from pynput import keyboard
 from pynput.mouse import Button, Controller
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "配置", "配置.txt")
+from 工具.图像识别 import 屏幕截图, 查找单个匹配, 查找所有匹配
+
 mouse = Controller()
+
+模板_花种目录 = os.path.join(os.path.dirname(__file__), "assets", "花种模板")
+模板_空地 = os.path.join(os.path.dirname(__file__), "assets", "花种模板", "0空地.png")
 
 
 # 后台 Esc 监听
@@ -24,115 +28,96 @@ def _启动停止监听():
 threading.Thread(target=_启动停止监听, daemon=True).start()
 
 
-def 读取配置():
-    if not os.path.exists(CONFIG_PATH):
-        print(f"错误：找不到 {CONFIG_PATH}")
-        return None, None
-
-    flowers = []
-    seed_pos = None
-    current_section = None
-
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line == "花朵坐标:":
-                current_section = "flower"
-            elif line == "花种位置:":
-                current_section = "seed"
-            elif line == "收花按钮:":
-                current_section = "button"
-            elif current_section == "flower":
-                try:
-                    x, y = line.split(",")
-                    flowers.append((int(x), int(y)))
-                except ValueError:
-                    pass
-            elif current_section == "seed":
-                try:
-                    x, y = line.split(",")
-                    seed_pos = (int(x), int(y))
-                except ValueError:
-                    pass
-
-    return flowers, seed_pos
+def 列出花种():
+    种子列表 = []
+    for f in sorted(os.listdir(模板_花种目录)):
+        if f.endswith(".png") and f != "0空地.png":
+            种子列表.append(f.replace(".png", ""))
+    return 种子列表
 
 
-def 等待按G校准():
-    """用户将鼠标移到实际第一朵花位置，按 G 键确认"""
+def 选择花种():
+    种子列表 = 列出花种()
+    if not 种子列表:
+        print("错误：花种模板目录为空，请放入花种图片")
+        return None
 
-    def on_press(key):
-        if hasattr(key, "char") and key.char == "g":
-            实际位置 = mouse.position
-            print(f"已获取实际第一朵花位置: {实际位置}")
-            return False
+    print("\n可选花种：")
+    for i, name in enumerate(种子列表):
+        print(f"  [{i + 1}] {name}")
 
-    print("请将鼠标移到游戏中实际的第一朵花位置，然后按 【G】 键确认校准")
-    with keyboard.Listener(on_press=on_press) as listener:
-        listener.join()
-        # listener stopped 后通过全局变量取到值
-    return mouse.position
+    while True:
+        try:
+            choice = input(f"\n请选择要种的花（1~{len(种子列表)}）：").strip()
+            idx = int(choice) - 1
+            if 0 <= idx < len(种子列表):
+                选中 = 种子列表[idx]
+                路径 = os.path.join(模板_花种目录, f"{选中}.png")
+                print(f"已选择：{选中}")
+                return 路径, 选中
+            else:
+                print(f"请输入 1~{len(种子列表)} 之间的数字")
+        except ValueError:
+            print("请输入有效数字")
 
 
 def 种花():
-    flowers, seed_pos = 读取配置()
+    print("=== 种花 ===")
 
-    if not flowers:
-        print("错误：没有花朵坐标，请先运行 工具/采集所有花朵田定位.py")
+    # ========== 第1步：选择花种 ==========
+    花种结果 = 选择花种()
+    if not 花种结果:
         return
-    if not seed_pos:
-        print("错误：没有花种位置，请先运行 工具/采集花种定位.py")
+    花种模板路径, 花种名称 = 花种结果
+
+    # ========== 第2步：截图找花种位置 ==========
+    print(f"\n正在识别花种位置...")
+    截图 = 屏幕截图()
+    花种位置 = 查找单个匹配(截图, 花种模板路径, 阈值=0.7)
+    if not 花种位置:
+        print(f"未在屏幕上找到【{花种名称}】，请确认该花种可见")
         return
+    print(f"【{花种名称}】位置: {花种位置}")
 
-    first_x, first_y = flowers[0]
-    print(f"花朵数量: {len(flowers)}")
-    print(f"记录的第一朵花位置: ({first_x}, {first_y})")
-    print(f"记录花种位置: {seed_pos}")
-
-    # 光标定位
-    mouse.position = (first_x, first_y)
-    print(f"鼠标已移到记录的位置，请确认并调整到实际花朵位置...")
-    time.sleep(1)
-
-    # 等待按 G 校准
-    clicked = 等待按G校准()
-    偏移_x = clicked[0] - first_x
-    偏移_y = clicked[1] - first_y
-    实际花种 = (seed_pos[0] + 偏移_x, seed_pos[1] + 偏移_y)
-    print(f"偏移量: ({偏移_x}, {偏移_y})")
-    print(f"修正后花种位置: {实际花种}")
-
-    print("1 秒后开始执行...（按 Esc 或 Ctrl+C 停止）")
-    time.sleep(1)
+    print(f"\n2 秒后开始执行...（按 Esc 或 Ctrl+C 停止）")
+    time.sleep(2)
 
     try:
-        # 1. 点击实际第一朵花位置
-        mouse.position = clicked
-        mouse.click(Button.left, 1)
-        print(f"点击第一朵花 {clicked}")
-        time.sleep(0.5)
-
-        # 2. 移到修正后的花种位置，按住
-        sx, sy = 实际花种
+        # ========== 第3步：移到花种位置，按住（不松开） ==========
+        sx, sy = 花种位置
         mouse.position = (sx, sy)
         time.sleep(0.1)
         mouse.press(Button.left)
-        print(f"在花种 ({sx}, {sy}) 按住鼠标")
-        time.sleep(0.1)
+        print(f"已按住【{花种名称}】，开始扫描空地并拖动...")
+        time.sleep(0.2)
 
-        # 3. 拖动经过所有花（偏移修正）
-        print("开始拖动...")
-        for i, (tx, ty) in enumerate(flowers):
-            实际位置 = (tx + 偏移_x, ty + 偏移_y)
-            mouse.position = 实际位置
-            print(f"经过第 {i + 1} 朵花: {实际位置}")
-            time.sleep(0.2)
+        # ========== 第4步：边拖动边实时扫描空地 ==========
+        已种植数 = 0
+        while True:
+            # 实时截图找当前剩余空地
+            当前截图 = 屏幕截图()
+            当前空地 = 查找所有匹配(当前截图, 模板_空地, 阈值=0.75)
 
-        # 4. 松开
+            if not 当前空地:
+                print("所有空地已种完！")
+                break
+
+            # 找到离当前鼠标最近的空地，减少无效移动
+            鼠标位置 = mouse.position
+            最近空地 = min(
+                当前空地,
+                key=lambda p: (p[0] - 鼠标位置[0]) ** 2 + (p[1] - 鼠标位置[1]) ** 2,
+            )
+
+            # 拖动到该空地
+            mouse.position = 最近空地
+            已种植数 += 1
+            print(f"已种 {已种植数}: 拖动到空地 ({最近空地[0]}, {最近空地[1]})")
+            time.sleep(0.3)  # 给游戏反应时间，同时等待种植生效
+
+        # ========== 第5步：松开 ==========
         mouse.release(Button.left)
-        print("=== 种植完成！ ===")
+        print(f"=== 【{花种名称}】种植完成！共种植 {已种植数} 块空地 ===")
 
     except KeyboardInterrupt:
         print("\n已停止（Ctrl+C），鼠标已释放。")

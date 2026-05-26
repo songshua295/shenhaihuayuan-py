@@ -6,8 +6,14 @@ import time
 from pynput import keyboard
 from pynput.mouse import Button, Controller
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "配置", "配置.txt")
+from 工具.图像识别 import 屏幕截图, 查找单个匹配, 查找所有匹配_多模板
+
 mouse = Controller()
+
+模板_浇水目录 = os.path.join(os.path.dirname(__file__), "assets", "浇水")
+模板_需要浇水 = os.path.join(
+    os.path.dirname(__file__), "assets", "浇水", "需要浇水模板"
+)
 
 
 # 后台 Esc 监听
@@ -24,115 +30,69 @@ def _启动停止监听():
 threading.Thread(target=_启动停止监听, daemon=True).start()
 
 
-def 读取配置():
-    if not os.path.exists(CONFIG_PATH):
-        print(f"错误：找不到 {CONFIG_PATH}")
-        return None, None
-
-    flowers = []
-    water_pos = None
-    current_section = None
-
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line == "花朵坐标:":
-                current_section = "flower"
-            elif line == "花种位置:":
-                current_section = "seed"
-            elif line == "收花按钮:":
-                current_section = "button"
-            elif line == "浇水按钮:":
-                current_section = "water"
-            elif current_section == "flower":
-                try:
-                    x, y = line.split(",")
-                    flowers.append((int(x), int(y)))
-                except ValueError:
-                    pass
-            elif current_section == "water":
-                try:
-                    x, y = line.split(",")
-                    water_pos = (int(x), int(y))
-                except ValueError:
-                    pass
-
-    return flowers, water_pos
-
-
-def 等待按G校准():
-    """用户将鼠标移到实际第一朵花位置，按 G 键确认"""
-
-    def on_press(key):
-        if hasattr(key, "char") and key.char == "g":
-            print(f"已获取实际第一朵花位置: {mouse.position}")
-            return False
-
-    print("请将鼠标移到游戏中实际的第一朵花位置，然后按 【G】 键确认校准")
-    with keyboard.Listener(on_press=on_press) as listener:
-        listener.join()
-    return mouse.position
-
-
 def 浇水():
-    flowers, water_pos = 读取配置()
+    print("=== 浇水 ===")
 
-    if not flowers:
-        print("错误：没有花朵坐标，请先运行 工具/采集所有花朵田定位.py")
+    # ========== 第1步：找需要浇水的花并点击，让按钮弹出来 ==========
+    print("正在查找需要浇水的花...")
+    需要浇水列表 = 查找所有匹配_多模板(屏幕截图(), 模板_需要浇水, 阈值=0.75)
+
+    if not 需要浇水列表:
+        print("未找到需要浇水的花")
         return
-    if not water_pos:
-        print("错误：没有浇水按钮位置，请先运行 工具/采集浇水按钮定位.py")
+
+    first = 需要浇水列表[0]
+    mouse.position = first
+    mouse.click(Button.left, 1)
+    print(f"已点击需要浇水的花 {first}，等待弹窗...")
+    time.sleep(0.8)
+
+    # ========== 第2步：截图找浇水按钮 ==========
+    print("正在查找浇水按钮...")
+    浇水按钮 = 查找单个匹配(
+        屏幕截图(), os.path.join(模板_浇水目录, "浇水按钮.png"), 阈值=0.7
+    )
+    if not 浇水按钮:
+        print("未找到浇水按钮，请确认模板 assets/浇水/浇水按钮.png 是否正确")
         return
+    print(f"浇水按钮位置: {浇水按钮}")
 
-    first_x, first_y = flowers[0]
-    print(f"花朵数量: {len(flowers)}")
-    print(f"记录的第一朵花位置: ({first_x}, {first_y})")
-    print(f"记录浇水按钮位置: {water_pos}")
-
-    # 光标定位
-    mouse.position = (first_x, first_y)
-    print(f"鼠标已移到记录的位置，请确认并调整到实际花朵位置...")
-    time.sleep(1)
-
-    # 等待按 G 校准
-    clicked = 等待按G校准()
-    偏移_x = clicked[0] - first_x
-    偏移_y = clicked[1] - first_y
-    实际浇水 = (water_pos[0] + 偏移_x, water_pos[1] + 偏移_y)
-    print(f"偏移量: ({偏移_x}, {偏移_y})")
-    print(f"修正后浇水按钮位置: {实际浇水}")
-
-    print("1 秒后开始执行...（按 Esc 或 Ctrl+C 停止）")
-    time.sleep(1)
+    print("2 秒后开始执行...（按 Esc 或 Ctrl+C 停止）")
+    time.sleep(2)
 
     try:
-        # 1. 点击实际第一朵花，触发弹窗
-        mouse.position = clicked
-        mouse.click(Button.left, 1)
-        print(f"点击第一朵花 {clicked}，等待弹窗...")
-        time.sleep(1.0)
-
-        # 2. 移到修正后的浇水按钮位置，按住
-        wx, wy = 实际浇水
-        mouse.position = (wx, wy)
+        # ========== 第3步：移到浇水按钮，按住 ==========
+        bx, by = 浇水按钮
+        mouse.position = (bx, by)
         time.sleep(0.1)
         mouse.press(Button.left)
-        print(f"在浇水按钮 ({wx}, {wy}) 按住鼠标")
-        time.sleep(0.1)
+        print(f"已按住浇水按钮，开始扫描需要浇水的花并拖动...")
+        time.sleep(0.2)
 
-        # 3. 拖动经过所有花（偏移修正）
-        print("开始拖动...")
-        for i, (tx, ty) in enumerate(flowers):
-            实际位置 = (tx + 偏移_x, ty + 偏移_y)
-            mouse.position = 实际位置
-            print(f"经过第 {i + 1} 朵花: {实际位置}")
-            time.sleep(0.2)
+        # ========== 第4步：边按住边实时扫描，逐个拖动 ==========
+        已浇数 = 0
+        while True:
+            当前截图 = 屏幕截图()
+            当前需要浇水 = 查找所有匹配_多模板(当前截图, 模板_需要浇水, 阈值=0.75)
 
-        # 4. 松开
+            if not 当前需要浇水:
+                print("所有需要浇水的花已浇完！")
+                break
+
+            鼠标位置 = mouse.position
+            最近花 = min(
+                当前需要浇水,
+                key=lambda p: (p[0] - 鼠标位置[0]) ** 2 + (p[1] - 鼠标位置[1]) ** 2,
+            )
+
+            mouse.position = 最近花
+            已浇数 += 1
+            print(f"已浇 {已浇数}: 拖动到 ({最近花[0]}, {最近花[1]})")
+            time.sleep(0.3)
+
+        # ========== 第5步：松开 ==========
         mouse.release(Button.left)
-        print("=== 浇水完成！ ===")
+        print(f"=== 浇水完成！共浇 {已浇数} 朵花 ===")
 
     except KeyboardInterrupt:
         print("\n已停止（Ctrl+C），鼠标已释放。")

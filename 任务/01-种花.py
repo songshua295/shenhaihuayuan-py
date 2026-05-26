@@ -3,6 +3,8 @@ import sys
 import threading
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from pynput import keyboard
 from pynput.mouse import Button, Controller
 
@@ -11,9 +13,9 @@ from 工具.读取配置 import 计算偏移位置, 读取配置
 
 mouse = Controller()
 
-模板_花种目录 = os.path.join(os.path.dirname(__file__), "素材", "01-种花模板", "模板")
+模板_花种目录 = os.path.join(os.path.dirname(__file__), "..", "素材", "01-种花模板", "模板")
 模板_空地 = os.path.join(
-    os.path.dirname(__file__), "素材", "01-种花模板", "空地", "0空地.png"
+    os.path.dirname(__file__), "..", "素材", "01-种花模板", "空地", "0空地.png"
 )
 
 # 读取配置

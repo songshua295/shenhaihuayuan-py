@@ -3,6 +3,8 @@ import sys
 import threading
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from pynput import keyboard
 from pynput.mouse import Button, Controller
 
@@ -11,8 +13,8 @@ from 工具.读取配置 import 计算偏移位置, 读取配置
 
 mouse = Controller()
 
-模板_花朵目录 = os.path.join(os.path.dirname(__file__), "素材", "04-加速", "模板")
-模板_铲除目录 = os.path.join(os.path.dirname(__file__), "素材", "05-铲除")
+模板_花朵目录 = os.path.join(os.path.dirname(__file__), "..", "素材", "04-加速", "模板")
+模板_铲除目录 = os.path.join(os.path.dirname(__file__), "..", "素材", "05-铲除")
 
 cfg = 读取配置()
 拖动间隔 = cfg["拖动间隔"]

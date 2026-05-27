@@ -37,6 +37,7 @@ threading.Thread(target=_启动停止监听, daemon=True).start()
 def 浇水():
     print("=== 浇水 ===")
 
+    # 第1次扫描：找需要浇水的花
     需要浇水列表 = 查找所有匹配_多模板(屏幕截图(), 模板_需要浇水, 阈值=0.75)
 
     if not 需要浇水列表:
@@ -54,6 +55,7 @@ def 浇水():
     time.sleep(2)
 
     try:
+        # 点击第一朵花，触发弹窗
         first = 需要浇水列表[0]
         first = 计算偏移位置(*first)
         mouse.position = first
@@ -61,6 +63,7 @@ def 浇水():
         print(f"已点击第一朵花 {first}，等待弹窗...")
         time.sleep(0.8)
 
+        # 找浇水按钮
         print("正在查找浇水按钮...")
         浇水按钮 = 查找单个匹配(
             屏幕截图(), os.path.join(模板_浇水目录, "浇水按钮.png"), 阈值=0.7
@@ -71,21 +74,42 @@ def 浇水():
         浇水按钮 = 计算偏移位置(*浇水按钮)
         print(f"浇水按钮位置: {浇水按钮}")
 
+        # 按住浇水按钮
         bx, by = 浇水按钮
         mouse.position = (bx, by)
         time.sleep(0.1)
         mouse.press(Button.left)
-        print(f"已按住浇水按钮，开始拖动...")
-        time.sleep(0.1)
+        print(f"已按住浇水按钮，开始扫描并拖动...")
+        time.sleep(0.2)
 
-        for i, (tx, ty) in enumerate(需要浇水列表):
-            偏移位置 = 计算偏移位置(tx, ty)
-            mouse.position = 偏移位置
-            print(f"经过第 {i + 1} 朵花: {偏移位置}")
+        # 实时扫描：边拖边截图（和种花一样的逻辑）
+        已浇数 = 0
+        while True:
+            if 最大上限 > 0 and 已浇数 >= 最大上限:
+                print(f"已达到上限 {最大上限}，停止")
+                break
+
+            当前截图 = 屏幕截图()
+            当前需要浇水 = 查找所有匹配_多模板(当前截图, 模板_需要浇水, 阈值=0.75)
+
+            if not 当前需要浇水:
+                print("所有需要浇水的花已浇完！")
+                break
+
+            鼠标位置 = mouse.position
+            最近花 = min(
+                当前需要浇水,
+                key=lambda p: (p[0] - 鼠标位置[0]) ** 2 + (p[1] - 鼠标位置[1]) ** 2,
+            )
+            最近花 = 计算偏移位置(*最近花)
+
+            mouse.position = 最近花
+            已浇数 += 1
+            print(f"已浇 {已浇数}: 拖动到 ({最近花[0]}, {最近花[1]})")
             time.sleep(拖动间隔)
 
         mouse.release(Button.left)
-        print(f"=== 浇水完成！共浇 {len(需要浇水列表)} 朵花 ===")
+        print(f"=== 浇水完成！共浇 {已浇数} 朵花 ===")
 
     except KeyboardInterrupt:
         print("\n已停止（Ctrl+C），鼠标已释放。")

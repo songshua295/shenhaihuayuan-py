@@ -20,7 +20,6 @@ mouse = Controller()
 
 cfg = 读取配置()
 拖动间隔 = cfg["拖动间隔"]
-最大上限 = cfg["最大上限"]
 
 
 def _启动停止监听():
@@ -45,15 +44,11 @@ def 收获():
         print("未在屏幕上找到成熟的花朵")
         return
 
-    if 最大上限 > 0:
-        花朵列表 = 花朵列表[:最大上限]
-
     print(f"识别到 {len(花朵列表)} 朵花")
     for i, pos in enumerate(花朵列表):
         print(f"  第 {i + 1} 朵: {pos}")
 
-    print("2 秒后开始执行...（按 Esc 或 Ctrl+C 停止）")
-    time.sleep(2)
+    print("开始执行...（按 Esc 或 Ctrl+C 停止）")
 
     try:
         first = 花朵列表[0]

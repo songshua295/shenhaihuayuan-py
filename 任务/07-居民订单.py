@@ -7,10 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from pynput import keyboard
 from pynput.mouse import Button, Controller
-
 from 工具.图像识别 import 屏幕截图, 查找单个匹配
+from 工具.日志打印 import 启动日志线程, 日志打印
 from 工具.读取配置 import 读取配置
-from 工具.日志打印 import 日志打印, 启动日志线程
 
 mouse = Controller()
 
